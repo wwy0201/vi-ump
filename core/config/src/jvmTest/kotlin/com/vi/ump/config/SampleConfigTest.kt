@@ -1,0 +1,87 @@
+package com.vi.ump.config
+
+import com.vi.ump.model.LayoutType
+import java.io.File
+import kotlin.test.Test
+import kotlin.test.assertEquals
+import kotlin.test.assertNotNull
+import kotlin.test.assertTrue
+
+/**
+ * 样本目录是**全项目唯一的测试数据来源**。
+ *
+ * 这里不内联任何 JSON：直接读 samples 目录下的 .json 文件，
+ * 于是"文档里给你看的示例"和"CI 里跑的东西"永远是同一份文件。
+ */
+class SampleConfigTest {
+
+    private fun repoRoot(): File {
+        var dir: File? = File(System.getProperty("user.dir") ?: ".").absoluteFile
+        while (dir != null) {
+            if (File(dir, "samples").isDirectory) return dir
+            dir = dir.parentFile
+        }
+        throw IllegalStateException("找不到 samples 目录，cwd=${System.getProperty("user.dir")}")
+    }
+
+    private fun sample(relative: String): File = File(repoRoot(), "samples/$relative")
+
+    private fun sampleFiles(): List<File> =
+        File(repoRoot(), "samples")
+            .listFiles { f -> f.isFile && f.name.endsWith(".json") }
+            .orEmpty()
+            .sortedBy { it.name }
+            .also { assertTrue(it.isNotEmpty(), "samples 下没有任何 .json 样本") }
+
+    @Test
+    fun everySampleCompilesWithoutError() {
+        val failures = mutableListOf<String>()
+        for (file in sampleFiles()) {
+            val schema = ConfigCompiler.loadAndCompile(file.readText())
+            val errors = schema.issues.filter { it.severity == Severity.ERROR }
+            if (errors.isNotEmpty()) {
+                failures += "${file.name}:\n" + errors.joinToString("\n") { "  $it" }
+            }
+        }
+        assertTrue(failures.isEmpty(), "以下样本编译失败:\n" + failures.joinToString("\n"))
+    }
+
+    @Test
+    fun everySampleDeclaresBothListAndDetail() {
+        for (file in sampleFiles()) {
+            val schema = ConfigCompiler.loadAndCompile(file.readText())
+            assertTrue(schema.feeds.isNotEmpty(), "${file.name} 缺少 feeds")
+            // 没有详情页的源（抖音：单条详情接口要 uifid，403）直接拿列表里的直链播放，
+            // 这种源不该被要求声明一个永远用不上的 details
+            val hasDetailPage = schema.pages.any { it.layout.type == LayoutType.DETAIL }
+            if (hasDetailPage) {
+                assertTrue(schema.details.isNotEmpty(), "${file.name} 缺少 details")
+            }
+        }
+    }
+
+    @Test
+    fun youtubeSampleUsesTextSplitInsteadOfJsonPath() {
+        val schema = ConfigCompiler.loadAndCompile(sample("youtube.json").readText())
+        val feed = assertNotNull(schema.feeds["channelUploads"], "youtube.json 缺少 channelUploads")
+
+        assertTrue(feed.isTextSplit, "Atom 是 XML，必须走 listSplit 文本通路")
+        assertNotNull(feed.listSplit, "listSplit 未编译成功")
+        assertEquals(
+            "{{baseUrl}}/feeds/videos.xml?channel_id={{p.channelId}}",
+            feed.request.urlTemplate,
+        )
+    }
+
+    @Test
+    fun qqSampleStripsTheNonStandardJsonEnvelope() {
+        val schema = ConfigCompiler.loadAndCompile(sample("qq-video.json").readText())
+        val feed = assertNotNull(schema.feeds["episodeQuality"], "qq-video.json 缺少 episodeQuality")
+        val strip = assertNotNull(feed.strip, "strip 未编译成功：QZOutputJson 外壳将无法解析")
+
+        assertEquals("QZOutputJson=", strip.prefix)
+        assertEquals(";", strip.suffix)
+        assertNotNull(feed.root, "root 路径未编译成功")
+        assertNotNull(feed.list, "list 路径未编译成功")
+    }
+}
