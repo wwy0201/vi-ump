@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+
+    <!-- 音频后台播放（M4.5）：Android 14+ 起播前台媒体服务必须同时声明权限与 service 的 type -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
+    <!-- Android 13+ 通知栏要运行时授权；没有它服务照样前台，只是通知栏看不见 -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
+
+    <!--
+        不申请任何存储权限：配置导入走 SAF（ACTION_OPEN_DOCUMENT），
+        无需 READ_EXTERNAL_STORAGE / MANAGE_EXTERNAL_STORAGE。
+
+        图标：`@mipmap/ic_launcher` 是设计好的 vi 字标（近黑底 + 荧光绿），
+        API 26+ 走 `mipmap-anydpi-v26` 的自适应图标（背景纯色 + 前景字标），
+        API 33+ 另带 monochrome 供"主题图标"使用。
+    -->
+
+    <application
+        android:name=".UmpApplication"
+        android:allowBackup="true"
+        android:icon="@mipmap/ic_launcher"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:label="@string/app_name"
+        android:supportsRtl="true"
+        android:networkSecurityConfig="@xml/network_security_config"
+        android:theme="@style/Theme.ViUmp">
+
+        <activity
+            android:name=".MainActivity"
+            android:configChanges="orientation|screenSize|screenLayout|keyboardHidden|uiMode"
+            android:exported="true"
+            android:theme="@style/Theme.ViUmp">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!--
+            音频常驻通知栏（M4.5）。exported=false：三颗控制键的 PendingIntent 由本进程发出，
+            不需要也不应该让别的 App 显式拉起这个服务。
+            播放器实例在 AudioSession，本服务只做"按钮 → AudioControlBus"与"标题/播放态 → 通知"。
+        -->
+        <service
+            android:name=".AudioPlaybackService"
+            android:exported="false"
+            android:foregroundServiceType="mediaPlayback" />
+    </application>
+
+</manifest>

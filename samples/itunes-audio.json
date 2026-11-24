@@ -1,0 +1,126 @@
+{
+  "schemaVersion": "1.0",
+  "meta": {
+    "id": "itunes-audio",
+    "name": "苹果音频",
+    "author": "vi-ump",
+    "color": "#FA243C",
+    "description": "iTunes 公开搜索接口（在线）：首页按专辑展示，详情页拉该专辑全部曲目，点任意一首进音频播放页；预览音频为 30 秒 m4a 直链"
+  },
+  "runtime": {
+    "baseUrl": "https://itunes.apple.com",
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+    }
+  },
+  "resources": {
+    "feeds": {
+      "albums": {
+        "request": {
+          "method": "GET",
+          "url": "{{baseUrl}}/search?term={{p.q}}&media=music&entity=album&limit=20"
+        },
+        "list": "$.results[*]",
+        "fields": {
+          "id": "$.collectionId",
+          "title": "$.collectionName",
+          "subtitle": "$.artistName",
+          "kind": { "kind": "const", "from": "audio" },
+          "poster": {
+            "kind": "jsonPath",
+            "from": "$.artworkUrl100",
+            "rewrite": [{ "pattern": "100x100bb", "replacement": "600x600bb" }]
+          }
+        }
+      }
+    },
+    "details": {
+      "album": {
+        "request": {
+          "method": "GET",
+          "url": "{{baseUrl}}/lookup?id={{id}}&entity=song&limit=50"
+        },
+        "root": "$",
+        "fields": {
+          "id": "$.results[0].collectionId",
+          "title": "$.results[0].collectionName",
+          "subtitle": "$.results[0].artistName",
+          "description": {
+            "kind": "const",
+            "from": "整张专辑的曲目列表。点任意一首开始播放；是否播完接下一首由用户「连续播放」开关决定（默认关闭）；预览音频为 30 秒试听片段。"
+          },
+          "kind": { "kind": "const", "from": "audio" },
+          "poster": {
+            "kind": "jsonPath",
+            "from": "$.results[0].artworkUrl100",
+            "rewrite": [{ "pattern": "100x100bb", "replacement": "600x600bb" }]
+          }
+        }
+      }
+    },
+    "tracks": {
+      "songs": {
+        "mode": "array",
+        "from": "$.results[*]",
+        "fields": {
+          "title": { "kind": "jsonPath", "from": "$.trackName", "required": true },
+          "url": { "kind": "jsonPath", "from": "$.previewUrl", "required": true },
+          "thumb": {
+            "kind": "jsonPath",
+            "from": "$.artworkUrl60",
+            "rewrite": [{ "pattern": "60x60bb", "replacement": "300x300bb" }]
+          }
+        }
+      }
+    }
+  },
+  "pages": [
+    {
+      "id": "home",
+      "title": "音频",
+      "layout": { "type": "poster_grid", "columns": 3, "gap": 12, "ratio": "1:1" },
+      "feed": "albums",
+      "params": { "q": "jazz" },
+      "viewModes": ["poster_grid", "list_linear"],
+      "card": {
+        "style": "poster",
+        "image": "poster",
+        "title": "title",
+        "subtitle": "subtitle",
+        "action": { "type": "detail" }
+      }
+    },
+    {
+      "id": "detail",
+      "title": "专辑",
+      "layout": { "type": "detail", "resource": "album", "tracks": "songs", "ratio": "1:1", "expandLines": 3 }
+    },
+    {
+      "id": "audio",
+      "title": "音频播放",
+      "layout": { "type": "audio_player", "showCover": true, "showPlaylist": true }
+    }
+  ],
+  "playback": {
+    "strategy": "direct",
+    "audio": {
+      "backgroundPlay": true,
+      "mode": "sequential",
+      "showNotification": true
+    }
+  },
+  "theme": {
+    "mode": "dark",
+    "primary": "#FA243C",
+    "accent": "#7C4DFF",
+    "background": "#0F0F13",
+    "surface": "#17171C",
+    "onSurface": "#E6E6EA",
+    "cornerRadius": 14,
+    "posterColumns": 3,
+    "fontScale": 1.0
+  },
+  "flags": {
+    "enableSearch": false
+  }
+}

@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!--
+        只作为 Compose 的宿主主题：真正的视觉由配置 theme 映射到 UmpTheme，
+        所以这里保持中性、无 ActionBar、深色底，避免启动瞬间闪白。
+    -->
+    <style name="Theme.ViUmp" parent="android:Theme.Material.NoActionBar">
+        <item name="android:windowBackground">#0F0F13</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+    </style>
+</resources>

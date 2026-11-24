@@ -1,0 +1,106 @@
+{
+  "schemaVersion": "1.0",
+  "meta": {
+    "id": "youtube",
+    "name": "YouTube 频道",
+    "author": "vi-ump-samples",
+    "version": "1.0.0",
+    "color": "#FF0033",
+    "description": "数据形态取自 https://www.youtube.com/feeds/videos.xml?channel_id=UC... 的真实 Atom 1.0 响应：最多 15 条、倒序、无分页参数。响应是 XML 而非 JSON，因此走 responseType=text + listSplit 文本分条，字段只能用 regex/const；带捕获组的 regex 必须显式 group=1，否则拿到的是整段标签。示例频道为 Kurzgesagt – In a Nutshell（UCsXVk37bltHxD1rDPwtNM8Q）；原先用的 Google Developers 频道（UC_x5XG1OV2P6uZZ5FSM9Ttw）已不再提供 feed，实测 404/500，换频道只需改 pages[home].params.channelId。注意：YouTube 没有按 id 取单条的公开接口，details 复用同一个 feed、只能拿到最新一条；playUrl 映射到的是 watch 页面链接而不是媒体直链（YouTube 不公开直链），因此 YouTube 条目进播放页会得到播放器报错，这是站点限制而非 App 缺陷。"
+  },
+  "runtime": {
+    "baseUrl": "https://www.youtube.com",
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Linux; Android 14; Mobile)",
+      "Accept-Language": "en-US,en;q=0.9"
+    },
+    "encoding": "utf-8",
+    "timeoutMs": 15000,
+    "retry": 2
+  },
+  "resources": {
+    "feeds": {
+      "channelUploads": {
+        "request": {
+          "method": "GET",
+          "url": "{{baseUrl}}/feeds/videos.xml?channel_id={{p.channelId}}"
+        },
+        "responseType": "text",
+        "listSplit": "(?s)<entry>(.*?)</entry>",
+        "fields": {
+          "id": { "kind": "regex", "pattern": "<yt:videoId>(.*?)</yt:videoId>", "group": 1 },
+          "title": { "kind": "regex", "pattern": "<title>(.*?)</title>", "group": 1 },
+          "poster": { "kind": "regex", "pattern": "<media:thumbnail[^>]*url=\"([^\"]+)\"", "group": 1 },
+          "playUrl": { "kind": "regex", "pattern": "<link[^>]*rel=\"alternate\"[^>]*href=\"([^\"]+)\"", "group": 1 },
+          "subtitle": { "kind": "regex", "pattern": "(?s)<author>\\s*<name>(.*?)</name>", "group": 1 },
+          "year": { "kind": "regex", "pattern": "<published>([0-9]{4})-", "group": 1, "type": "int" },
+          "kind": { "kind": "const", "from": "video" }
+        },
+        "paging": { "mode": "page", "maxPage": 1 }
+      }
+    },
+    "details": {
+      "video": {
+        "request": {
+          "method": "GET",
+          "url": "{{baseUrl}}/feeds/videos.xml?channel_id={{p.channelId}}"
+        },
+        "responseType": "text",
+        "listSplit": "(?s)<entry>(.*?)</entry>",
+        "fields": {
+          "id": { "kind": "regex", "pattern": "<yt:videoId>(.*?)</yt:videoId>", "group": 1 },
+          "title": { "kind": "regex", "pattern": "<title>(.*?)</title>", "group": 1 },
+          "poster": { "kind": "regex", "pattern": "<media:thumbnail[^>]*url=\"([^\"]+)\"", "group": 1 },
+          "playUrl": { "kind": "regex", "pattern": "<link[^>]*rel=\"alternate\"[^>]*href=\"([^\"]+)\"", "group": 1 },
+          "subtitle": { "kind": "regex", "pattern": "(?s)<author>\\s*<name>(.*?)</name>", "group": 1 },
+          "year": { "kind": "regex", "pattern": "<published>([0-9]{4})-", "group": 1, "type": "int" },
+          "description": { "kind": "regex", "pattern": "(?s)<media:description>(.*?)</media:description>", "group": 1 },
+          "kind": { "kind": "const", "from": "video" }
+        }
+      }
+    }
+  },
+  "pages": [
+    {
+      "id": "home",
+      "title": "YouTube",
+      "layout": { "type": "poster_grid", "columns": 3, "ratio": "16:9", "gap": 12 },
+      "feed": "channelUploads",
+      "params": { "channelId": "UCsXVk37bltHxD1rDPwtNM8Q" },
+      "card": {
+        "style": "poster",
+        "image": "poster",
+        "title": "title",
+        "subtitle": "subtitle",
+        "action": { "type": "detail" }
+      }
+    },
+    {
+      "id": "detail",
+      "title": "视频详情",
+      "layout": { "type": "detail", "resource": "video", "ratio": "16:9", "expandLines": 4 }
+    }
+  ],
+  "playback": {
+    "strategy": "direct",
+    "headers": {
+      "Referer": "https://www.youtube.com/",
+      "User-Agent": "Mozilla/5.0 (Linux; Android 14; Mobile)"
+    }
+  },
+  "theme": {
+    "mode": "dark",
+    "primary": "#FF0033",
+    "background": "#0F0F0F",
+    "surface": "#181818",
+    "onSurface": "#F1F1F1",
+    "accent": "#3EA6FF",
+    "cornerRadius": 12,
+    "density": "comfortable",
+    "posterColumns": 3,
+    "fontScale": 1.0
+  },
+  "flags": {
+    "enableSearch": false
+  }
+}

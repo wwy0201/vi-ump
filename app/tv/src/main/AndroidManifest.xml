@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <!-- 4.4 导入源走文件路径时需要；SAF 在部分盒子上没有 DocumentsUI -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" />
+
+    <!-- 电视：没有触摸屏、也不强制要求 Leanback（国产盒子大多只认普通 Launcher） -->
+    <uses-feature android:name="android.hardware.touchscreen" android:required="false" />
+    <uses-feature android:name="android.software.leanback" android:required="false" />
+
+    <application
+        android:name=".TvApplication"
+        android:allowBackup="false"
+        android:icon="@mipmap/ic_launcher"
+        android:banner="@drawable/tv_banner"
+        android:label="@string/app_name"
+        android:largeHeap="true"
+        android:theme="@style/TvTheme">
+
+        <activity
+            android:name=".TvMainActivity"
+            android:exported="true"
+            android:configChanges="orientation|screenSize|keyboardHidden|navigation|uiMode"
+            android:screenOrientation="landscape"
+            android:theme="@style/TvTheme">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <!-- 普通盒子桌面 -->
+                <category android:name="android.intent.category.LAUNCHER" />
+                <!-- Android TV 桌面；4.4 盒子会忽略未知 category -->
+                <category android:name="android.intent.category.LEANBACK_LAUNCHER" />
+            </intent-filter>
+        </activity>
+    </application>
+
+</manifest>

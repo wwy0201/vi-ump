@@ -1,0 +1,77 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    音频常驻通知：两层布局（用户指定）。
+    第一层 = 当前曲目名 + 最右"退出"；第二层 = 上一首 / 暂停·播放 / 下一首。
+    图标全部用系统内置资源，避免为本服务单独引一套图标库。
+-->
+<LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    android:layout_width="match_parent"
+    android:layout_height="wrap_content"
+    android:orientation="vertical"
+    android:paddingStart="12dp"
+    android:paddingEnd="6dp"
+    android:paddingTop="6dp"
+    android:paddingBottom="6dp">
+
+    <!-- 第一层：曲目名 + 退出 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center_vertical">
+
+        <TextView
+            android:id="@+id/audio_title"
+            android:layout_width="0dp"
+            android:layout_height="wrap_content"
+            android:layout_weight="1"
+            android:singleLine="true"
+            android:ellipsize="end"
+            android:textSize="14sp"
+            android:textColor="#DE000000"
+            android:text="正在播放" />
+
+        <ImageButton
+            android:id="@+id/audio_close"
+            android:layout_width="32dp"
+            android:layout_height="32dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="退出"
+            android:src="@android:drawable/ic_menu_close_clear_cancel" />
+    </LinearLayout>
+
+    <!-- 第二层：上一首 / 暂停·播放 / 下一首 -->
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="horizontal"
+        android:gravity="center"
+        android:layout_marginTop="2dp">
+
+        <ImageButton
+            android:id="@+id/audio_prev"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="上一首"
+            android:src="@android:drawable/ic_media_previous" />
+
+        <ImageButton
+            android:id="@+id/audio_play_pause"
+            android:layout_width="56dp"
+            android:layout_height="48dp"
+            android:layout_marginStart="24dp"
+            android:layout_marginEnd="24dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="暂停或播放"
+            android:src="@android:drawable/ic_media_pause" />
+
+        <ImageButton
+            android:id="@+id/audio_next"
+            android:layout_width="48dp"
+            android:layout_height="48dp"
+            android:background="?android:attr/selectableItemBackgroundBorderless"
+            android:contentDescription="下一首"
+            android:src="@android:drawable/ic_media_next" />
+    </LinearLayout>
+</LinearLayout>

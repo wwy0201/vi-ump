@@ -1,0 +1,123 @@
+{
+  "schemaVersion": "1.0",
+  "meta": {
+    "id": "bing-wallpaper",
+    "name": "必应壁纸",
+    "author": "vi-ump",
+    "color": "#3B82F6",
+    "description": "必应每日壁纸（在线接口）：一次返回 8 张，首页按天翻页，详情是图集，点开进图片查看器（左右滑动 + 双指缩放）"
+  },
+  "runtime": {
+    "baseUrl": "https://www.bing.com",
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0 Safari/537.36"
+    }
+  },
+  "resources": {
+    "feeds": {
+      "daily": {
+        "request": {
+          "method": "GET",
+          "url": "{{baseUrl}}/HPImageArchive.aspx?format=js&idx={{p.day}}&n=8&mkt=zh-CN"
+        },
+        "list": "$.images[*]",
+        "fields": {
+          "id": "$.startdate",
+          "title": "$.title",
+          "subtitle": "$.copyright",
+          "kind": { "kind": "const", "from": "image" },
+          "poster": {
+            "kind": "jsonPath",
+            "from": "$.urlbase",
+            "prefix": "{{baseUrl}}",
+            "suffix": "_400x240.jpg"
+          }
+        },
+        "paging": { "mode": "page", "param": "day", "startAt": 0, "step": 1, "maxPage": 3 }
+      }
+    },
+    "details": {
+      "gallery": {
+        "request": {
+          "method": "GET",
+          "url": "{{baseUrl}}/HPImageArchive.aspx?format=js&idx={{p.day}}&n=8&mkt=zh-CN"
+        },
+        "root": "$",
+        "fields": {
+          "id": { "kind": "const", "from": "bing-daily" },
+          "title": { "kind": "const", "from": "必应每日壁纸" },
+          "description": {
+            "kind": "const",
+            "from": "每天更新的高清壁纸图集。点开任意一张进入查看器：左右滑动切换，双指缩放，双击复位。"
+          },
+          "kind": { "kind": "const", "from": "image" },
+          "poster": {
+            "kind": "jsonPath",
+            "from": "$.images[0].urlbase",
+            "prefix": "{{baseUrl}}",
+            "suffix": "_400x240.jpg"
+          }
+        }
+      }
+    },
+    "tracks": {
+      "daily": {
+        "mode": "array",
+        "from": "$.images[*]",
+        "fields": {
+          "title": "$.title",
+          "url": {
+            "kind": "jsonPath",
+            "from": "$.urlbase",
+            "prefix": "{{baseUrl}}",
+            "suffix": "_1920x1080.jpg"
+          },
+          "thumb": {
+            "kind": "jsonPath",
+            "from": "$.urlbase",
+            "prefix": "{{baseUrl}}",
+            "suffix": "_400x240.jpg"
+          }
+        }
+      }
+    }
+  },
+  "pages": [
+    {
+      "id": "home",
+      "title": "壁纸",
+      "layout": { "type": "poster_grid", "columns": 2, "ratio": "16:9" },
+      "feed": "daily",
+      "params": { "day": "0" },
+      "card": {
+        "style": "wide",
+        "image": "poster",
+        "title": "title",
+        "subtitle": "subtitle",
+        "action": { "type": "detail" }
+      }
+    },
+    {
+      "id": "detail",
+      "title": "图集",
+      "layout": { "type": "detail", "resource": "gallery", "tracks": "daily", "expandLines": 3 }
+    },
+    {
+      "id": "viewer",
+      "title": "查看",
+      "layout": { "type": "image_viewer" }
+    }
+  ],
+  "theme": {
+    "mode": "dark",
+    "primary": "#3B82F6",
+    "accent": "#F59E0B",
+    "cornerRadius": 14,
+    "posterColumns": 2,
+    "fontScale": 1.0
+  },
+  "flags": {
+    "enableSearch": false,
+    "enableHistory": false
+  }
+}

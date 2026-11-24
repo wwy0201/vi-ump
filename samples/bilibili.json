@@ -1,0 +1,968 @@
+{
+  "schemaVersion": "1.0",
+  "meta": {
+    "id": "bilibili",
+    "name": "Bilibili",
+    "author": "vi-ump-samples",
+    "version": "1.1.0",
+    "color": "#FB7299",
+    "description": "基于 B 站公开 Web 接口（2026-11 实测，未登录态）。首页使用 index/top/feed/rcmd；热门/动画/纪录片/音乐使用 web-interface 的 popular 与 ranking/v2（rid=1/177/3）。电影/电视剧改为官方 PGC 正片库：列表走 pgc/season/index/result（season_type=2/5，分页 page），详情走 pgc/view/web/season?season_id={{id}}，整季 episodes 一次取全，每个 ep_id 再走 pgc/player/web/playurl 取 mp4 直链。普通 UGC 条目仍走 videoDetail（x/web-interface/view + x/player/playurl），两类详情由条目字段 detailResource 区分。推荐栏已删除：它与首页共用 rcmd，仅 fresh_type 不同，数据重复。注意：PGC 里的部分电影/剧集属于大会员或付费内容，未登录态可能只能试看；播放直链带签名且有时效，episodes.cacheTtlMs 保持 30 分钟。播放头必须用桌面 UA，B 站 CDN 对手机 UA 的 mp4 直链会 403。"
+  },
+  "runtime": {
+    "baseUrl": "https://api.bilibili.com",
+    "imageBase": "https://i0.hdslb.com",
+    "headers": {
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36",
+      "Accept": "application/json, text/plain, */*",
+      "Accept-Language": "zh-CN,zh;q=0.9,en;q=0.8",
+      "Referer": "https://www.bilibili.com/"
+    },
+    "encoding": "utf-8",
+    "timeoutMs": 20000,
+    "retry": 2,
+    "proxyBypass": [
+      "bilibili.com",
+      "hdslb.com",
+      "bilivideo.com",
+      "biliapi.net"
+    ]
+  },
+  "resources": {
+    "feeds": {
+      "homeFeed": {
+        "request": {
+          "method": "GET",
+          "url": "https://api.bilibili.com/x/web-interface/index/top/feed/rcmd?fresh_type=3&ps=20&fresh_idx={{fresh_idx}}&fresh_idx_1h={{fresh_idx}}&brush={{fresh_idx}}&feed_version=V8&homepage_ver=1&y_num=5"
+        },
+        "responseType": "json",
+        "root": "$.data",
+        "list": "$.item[*]",
+        "fields": {
+          "id": {
+            "kind": "jsonPath",
+            "from": "$.bvid",
+            "required": true
+          },
+          "title": {
+            "kind": "jsonPath",
+            "from": "$.title",
+            "required": true,
+            "rewrite": [
+              {
+                "pattern": "&amp;",
+                "replacement": "&"
+              },
+              {
+                "pattern": "&lt;",
+                "replacement": "<"
+              },
+              {
+                "pattern": "&gt;",
+                "replacement": ">"
+              },
+              {
+                "pattern": "&quot;",
+                "replacement": "\""
+              },
+              {
+                "pattern": "&#0*39;",
+                "replacement": "'"
+              }
+            ]
+          },
+          "poster": {
+            "kind": "jsonPath",
+            "from": "$.pic",
+            "rewrite": [
+              {
+                "pattern": "^http://",
+                "replacement": "https://"
+              },
+              {
+                "pattern": "^//",
+                "replacement": "https://"
+              }
+            ]
+          },
+          "subtitle": {
+            "kind": "jsonPath",
+            "from": "$.owner.name"
+          },
+          "duration": {
+            "kind": "jsonPath",
+            "from": "$.duration",
+            "type": "int"
+          },
+          "trackCount": {
+            "kind": "jsonPath",
+            "from": "$.videos",
+            "type": "int"
+          },
+          "type": {
+            "kind": "jsonPath",
+            "from": "$.tname"
+          },
+          "kind": {
+            "kind": "const",
+            "from": "video"
+          }
+        },
+        "paging": {
+          "mode": "page",
+          "param": "fresh_idx",
+          "startAt": 1,
+          "step": 1,
+          "maxPage": 10
+        }
+      },
+      "popularFeed": {
+        "request": {
+          "method": "GET",
+          "url": "https://api.bilibili.com/x/web-interface/popular?ps=20&pn={{pn}}"
+        },
+        "responseType": "json",
+        "root": "$.data",
+        "list": "$.list[*]",
+        "fields": {
+          "id": {
+            "kind": "jsonPath",
+            "from": "$.bvid",
+            "required": true
+          },
+          "title": {
+            "kind": "jsonPath",
+            "from": "$.title",
+            "required": true,
+            "rewrite": [
+              {
+                "pattern": "&amp;",
+                "replacement": "&"
+              },
+              {
+                "pattern": "&lt;",
+                "replacement": "<"
+              },
+              {
+                "pattern": "&gt;",
+                "replacement": ">"
+              },
+              {
+                "pattern": "&quot;",
+                "replacement": "\""
+              },
+              {
+                "pattern": "&#0*39;",
+                "replacement": "'"
+              }
+            ]
+          },
+          "poster": {
+            "kind": "jsonPath",
+            "from": "$.pic",
+            "rewrite": [
+              {
+                "pattern": "^http://",
+                "replacement": "https://"
+              },
+              {
+                "pattern": "^//",
+                "replacement": "https://"
+              }
+            ]
+          },
+          "subtitle": {
+            "kind": "jsonPath",
+            "from": "$.owner.name"
+          },
+          "duration": {
+            "kind": "jsonPath",
+            "from": "$.duration",
+            "type": "int"
+          },
+          "trackCount": {
+            "kind": "jsonPath",
+            "from": "$.videos",
+            "type": "int"
+          },
+          "type": {
+            "kind": "jsonPath",
+            "from": "$.tname"
+          },
+          "kind": {
+            "kind": "const",
+            "from": "video"
+          }
+        },
+        "paging": {
+          "mode": "page",
+          "param": "pn",
+          "startAt": 1,
+          "step": 1,
+          "maxPage": 10
+        }
+      },
+      "movieFeed": {
+        "request": {
+          "method": "GET",
+          "url": "https://api.bilibili.com/pgc/season/index/result?season_type=2&st=1&sort=0&page={{page}}&pagesize=20&type=1&area=-1&style_id=-1&season_version=-1&spoken_language_type=-1&is_finish=-1&copyright=-1&season_status=-1&season_month=-1&year=-1"
+        },
+        "responseType": "json",
+        "root": "$.data",
+        "list": "$.list[*]",
+        "fields": {
+          "id": {
+            "kind": "jsonPath",
+            "from": "$.season_id",
+            "type": "string",
+            "required": true
+          },
+          "title": {
+            "kind": "jsonPath",
+            "from": "$.title",
+            "required": true,
+            "rewrite": [
+              {
+                "pattern": "&amp;",
+                "replacement": "&"
+              },
+              {
+                "pattern": "&lt;",
+                "replacement": "<"
+              },
+              {
+                "pattern": "&gt;",
+                "replacement": ">"
+              },
+              {
+                "pattern": "&quot;",
+                "replacement": "\""
+              },
+              {
+                "pattern": "&#0*39;",
+                "replacement": "'"
+              }
+            ]
+          },
+          "poster": {
+            "kind": "jsonPath",
+            "from": "$.cover",
+            "rewrite": [
+              {
+                "pattern": "^http://",
+                "replacement": "https://"
+              },
+              {
+                "pattern": "^//",
+                "replacement": "https://"
+              }
+            ]
+          },
+          "subtitle": {
+            "kind": "jsonPath",
+            "from": "$.index_show"
+          },
+          "score": {
+            "kind": "jsonPath",
+            "from": "$.score",
+            "type": "float"
+          },
+          "type": {
+            "kind": "const",
+            "from": "电影"
+          },
+          "kind": {
+            "kind": "const",
+            "from": "video"
+          },
+          "detailResource": {
+            "kind": "const",
+            "from": "pgcDetail"
+          }
+        },
+        "paging": {
+          "mode": "page",
+          "param": "page",
+          "startAt": 1,
+          "step": 1,
+          "maxPage": 10
+        }
+      },
+      "tvFeed": {
+        "request": {
+          "method": "GET",
+          "url": "https://api.bilibili.com/pgc/season/index/result?season_type=5&st=1&sort=0&page={{page}}&pagesize=20&type=1&area=-1&style_id=-1&season_version=-1&spoken_language_type=-1&is_finish=-1&copyright=-1&season_status=-1&season_month=-1&year=-1"
+        },
+        "responseType": "json",
+        "root": "$.data",
+        "list": "$.list[*]",
+        "fields": {
+          "id": {
+            "kind": "jsonPath",
+            "from": "$.season_id",
+            "type": "string",
+            "required": true
+          },
+          "title": {
+            "kind": "jsonPath",
+            "from": "$.title",
+            "required": true,
+            "rewrite": [
+              {
+                "pattern": "&amp;",
+                "replacement": "&"
+              },
+              {
+                "pattern": "&lt;",
+                "replacement": "<"
+              },
+              {
+                "pattern": "&gt;",
+                "replacement": ">"
+              },
+              {
+                "pattern": "&quot;",
+                "replacement": "\""
+              },
+              {
+                "pattern": "&#0*39;",
+                "replacement": "'"
+              }
+            ]
+          },
+          "poster": {
+            "kind": "jsonPath",
+            "from": "$.cover",
+            "rewrite": [
+              {
+                "pattern": "^http://",
+                "replacement": "https://"
+              },
+              {
+                "pattern": "^//",
+                "replacement": "https://"
+              }
+            ]
+          },
+          "subtitle": {
+            "kind": "jsonPath",
+            "from": "$.index_show"
+          },
+          "score": {
+            "kind": "jsonPath",
+            "from": "$.score",
+            "type": "float"
+          },
+          "type": {
+            "kind": "const",
+            "from": "电视剧"
+          },
+          "kind": {
+            "kind": "const",
+            "from": "video"
+          },
+          "detailResource": {
+            "kind": "const",
+            "from": "pgcDetail"
+          }
+        },
+        "paging": {
+          "mode": "page",
+          "param": "page",
+          "startAt": 1,
+          "step": 1,
+          "maxPage": 10
+        }
+      },
+      "animationFeed": {
+        "request": {
+          "method": "GET",
+          "url": "https://api.bilibili.com/x/web-interface/ranking/v2?rid=1&type=all"
+        },
+        "responseType": "json",
+        "root": "$.data",
+        "list": "$.list[*]",
+        "fields": {
+          "id": {
+            "kind": "jsonPath",
+            "from": "$.bvid",
+            "required": true
+          },
+          "title": {
+            "kind": "jsonPath",
+            "from": "$.title",
+            "required": true,
+            "rewrite": [
+              {
+                "pattern": "&amp;",
+                "replacement": "&"
+              },
+              {
+                "pattern": "&lt;",
+                "replacement": "<"
+              },
+              {
+                "pattern": "&gt;",
+                "replacement": ">"
+              },
+              {
+                "pattern": "&quot;",
+                "replacement": "\""
+              },
+              {
+                "pattern": "&#0*39;",
+                "replacement": "'"
+              }
+            ]
+          },
+          "poster": {
+            "kind": "jsonPath",
+            "from": "$.pic",
+            "rewrite": [
+              {
+                "pattern": "^http://",
+                "replacement": "https://"
+              },
+              {
+                "pattern": "^//",
+                "replacement": "https://"
+              }
+            ]
+          },
+          "subtitle": {
+            "kind": "jsonPath",
+            "from": "$.owner.name"
+          },
+          "duration": {
+            "kind": "jsonPath",
+            "from": "$.duration",
+            "type": "int"
+          },
+          "trackCount": {
+            "kind": "jsonPath",
+            "from": "$.videos",
+            "type": "int"
+          },
+          "type": {
+            "kind": "jsonPath",
+            "from": "$.tname"
+          },
+          "kind": {
+            "kind": "const",
+            "from": "video"
+          }
+        },
+        "paging": {
+          "mode": "page",
+          "maxPage": 1
+        }
+      },
+      "documentaryFeed": {
+        "request": {
+          "method": "GET",
+          "url": "https://api.bilibili.com/x/web-interface/ranking/v2?rid=177&type=all"
+        },
+        "responseType": "json",
+        "root": "$.data",
+        "list": "$.list[*]",
+        "fields": {
+          "id": {
+            "kind": "jsonPath",
+            "from": "$.bvid",
+            "required": true
+          },
+          "title": {
+            "kind": "jsonPath",
+            "from": "$.title",
+            "required": true,
+            "rewrite": [
+              {
+                "pattern": "&amp;",
+                "replacement": "&"
+              },
+              {
+                "pattern": "&lt;",
+                "replacement": "<"
+              },
+              {
+                "pattern": "&gt;",
+                "replacement": ">"
+              },
+              {
+                "pattern": "&quot;",
+                "replacement": "\""
+              },
+              {
+                "pattern": "&#0*39;",
+                "replacement": "'"
+              }
+            ]
+          },
+          "poster": {
+            "kind": "jsonPath",
+            "from": "$.pic",
+            "rewrite": [
+              {
+                "pattern": "^http://",
+                "replacement": "https://"
+              },
+              {
+                "pattern": "^//",
+                "replacement": "https://"
+              }
+            ]
+          },
+          "subtitle": {
+            "kind": "jsonPath",
+            "from": "$.owner.name"
+          },
+          "duration": {
+            "kind": "jsonPath",
+            "from": "$.duration",
+            "type": "int"
+          },
+          "trackCount": {
+            "kind": "jsonPath",
+            "from": "$.videos",
+            "type": "int"
+          },
+          "type": {
+            "kind": "jsonPath",
+            "from": "$.tname"
+          },
+          "kind": {
+            "kind": "const",
+            "from": "video"
+          }
+        },
+        "paging": {
+          "mode": "page",
+          "maxPage": 1
+        }
+      },
+      "musicFeed": {
+        "request": {
+          "method": "GET",
+          "url": "https://api.bilibili.com/x/web-interface/ranking/v2?rid=3&type=all"
+        },
+        "responseType": "json",
+        "root": "$.data",
+        "list": "$.list[*]",
+        "fields": {
+          "id": {
+            "kind": "jsonPath",
+            "from": "$.bvid",
+            "required": true
+          },
+          "title": {
+            "kind": "jsonPath",
+            "from": "$.title",
+            "required": true,
+            "rewrite": [
+              {
+                "pattern": "&amp;",
+                "replacement": "&"
+              },
+              {
+                "pattern": "&lt;",
+                "replacement": "<"
+              },
+              {
+                "pattern": "&gt;",
+                "replacement": ">"
+              },
+              {
+                "pattern": "&quot;",
+                "replacement": "\""
+              },
+              {
+                "pattern": "&#0*39;",
+                "replacement": "'"
+              }
+            ]
+          },
+          "poster": {
+            "kind": "jsonPath",
+            "from": "$.pic",
+            "rewrite": [
+              {
+                "pattern": "^http://",
+                "replacement": "https://"
+              },
+              {
+                "pattern": "^//",
+                "replacement": "https://"
+              }
+            ]
+          },
+          "subtitle": {
+            "kind": "jsonPath",
+            "from": "$.owner.name"
+          },
+          "duration": {
+            "kind": "jsonPath",
+            "from": "$.duration",
+            "type": "int"
+          },
+          "trackCount": {
+            "kind": "jsonPath",
+            "from": "$.videos",
+            "type": "int"
+          },
+          "type": {
+            "kind": "jsonPath",
+            "from": "$.tname"
+          },
+          "kind": {
+            "kind": "const",
+            "from": "video"
+          }
+        },
+        "paging": {
+          "mode": "page",
+          "maxPage": 1
+        }
+      }
+    },
+    "details": {
+      "videoDetail": {
+        "request": {
+          "method": "GET",
+          "url": "https://api.bilibili.com/x/web-interface/view?bvid={{id}}"
+        },
+        "responseType": "json",
+        "root": "$.data",
+        "fields": {
+          "id": {
+            "kind": "jsonPath",
+            "from": "$.bvid",
+            "required": true
+          },
+          "title": {
+            "kind": "jsonPath",
+            "from": "$.title",
+            "required": true,
+            "rewrite": [
+              {
+                "pattern": "&amp;",
+                "replacement": "&"
+              },
+              {
+                "pattern": "&lt;",
+                "replacement": "<"
+              },
+              {
+                "pattern": "&gt;",
+                "replacement": ">"
+              },
+              {
+                "pattern": "&quot;",
+                "replacement": "\""
+              },
+              {
+                "pattern": "&#0*39;",
+                "replacement": "'"
+              }
+            ]
+          },
+          "poster": {
+            "kind": "jsonPath",
+            "from": "$.pic",
+            "rewrite": [
+              {
+                "pattern": "^http://",
+                "replacement": "https://"
+              },
+              {
+                "pattern": "^//",
+                "replacement": "https://"
+              }
+            ]
+          },
+          "subtitle": {
+            "kind": "jsonPath",
+            "from": "$.owner.name"
+          },
+          "description": {
+            "kind": "jsonPath",
+            "from": "$.desc"
+          },
+          "trackCount": {
+            "kind": "jsonPath",
+            "from": "$.videos",
+            "type": "int"
+          },
+          "type": {
+            "kind": "jsonPath",
+            "from": "$.tname"
+          },
+          "actors": {
+            "kind": "jsonPath",
+            "from": "$.owner.name"
+          },
+          "tags": {
+            "kind": "jsonPath",
+            "from": "$.tags[*].tag_name"
+          },
+          "kind": {
+            "kind": "const",
+            "from": "video"
+          }
+        },
+        "episodes": {
+          "ids": "$.cid",
+          "item": {
+            "request": {
+              "method": "GET",
+              "url": "https://api.bilibili.com/x/player/playurl?bvid={{id}}&cid={{episode}}&qn=64&fnval=1&fourk=1",
+              "headers": {
+                "Referer": "https://www.bilibili.com/video/{{id}}",
+                "Origin": "https://www.bilibili.com"
+              }
+            },
+            "responseType": "json",
+            "root": "$.data",
+            "fields": {
+              "title": {
+                "kind": "const",
+                "from": "正片"
+              },
+              "playUrl": {
+                "kind": "jsonPath",
+                "from": "$.durl[0].url"
+              },
+              "kind": {
+                "kind": "const",
+                "from": "video"
+              }
+            }
+          },
+          "lockedPath": "$.durl[0].url",
+          "lockedLabel": "不可播",
+          "groupName": "播放",
+          "maxItems": 1,
+          "concurrency": 1,
+          "cacheTtlMs": 1800000
+        }
+      },
+      "pgcDetail": {
+        "request": {
+          "method": "GET",
+          "url": "https://api.bilibili.com/pgc/view/web/season?season_id={{id}}"
+        },
+        "responseType": "json",
+        "root": "$.result",
+        "fields": {
+          "id": {
+            "kind": "jsonPath",
+            "from": "$.season_id",
+            "type": "string",
+            "required": true
+          },
+          "title": {
+            "kind": "jsonPath",
+            "from": "$.title",
+            "required": true,
+            "rewrite": [
+              {
+                "pattern": "&amp;",
+                "replacement": "&"
+              },
+              {
+                "pattern": "&lt;",
+                "replacement": "<"
+              },
+              {
+                "pattern": "&gt;",
+                "replacement": ">"
+              },
+              {
+                "pattern": "&quot;",
+                "replacement": "\""
+              },
+              {
+                "pattern": "&#0*39;",
+                "replacement": "'"
+              }
+            ]
+          },
+          "poster": {
+            "kind": "jsonPath",
+            "from": "$.cover",
+            "rewrite": [
+              {
+                "pattern": "^http://",
+                "replacement": "https://"
+              },
+              {
+                "pattern": "^//",
+                "replacement": "https://"
+              }
+            ]
+          },
+          "subtitle": {
+            "kind": "jsonPath",
+            "from": "$.subtitle"
+          },
+          "description": {
+            "kind": "jsonPath",
+            "from": "$.evaluate"
+          },
+          "score": {
+            "kind": "jsonPath",
+            "from": "$.rating.score",
+            "type": "float"
+          },
+          "trackCount": {
+            "kind": "jsonPath",
+            "from": "$.total",
+            "type": "int"
+          },
+          "kind": {
+            "kind": "const",
+            "from": "video"
+          },
+          "detailResource": {
+            "kind": "const",
+            "from": "pgcDetail"
+          }
+        },
+        "episodes": {
+          "ids": "$.episodes[*].id",
+          "titles": "$.episodes[*].long_title",
+          "titlesFallback": "$.episodes[*].title",
+          "item": {
+            "request": {
+              "method": "GET",
+              "url": "https://api.bilibili.com/pgc/player/web/playurl?ep_id={{episode}}&qn=64&fnval=1&fourk=1",
+              "headers": {
+                "Referer": "https://www.bilibili.com/bangumi/play/ep{{episode}}",
+                "Origin": "https://www.bilibili.com"
+              }
+            },
+            "responseType": "json",
+            "root": "$.result",
+            "fields": {
+              "title": {
+                "kind": "const",
+                "from": "正片"
+              },
+              "playUrl": {
+                "kind": "jsonPath",
+                "from": "$.durl[0].url"
+              },
+              "kind": {
+                "kind": "const",
+                "from": "video"
+              }
+            }
+          },
+          "lockedPath": "$.durl[0].url",
+          "lockedLabel": "不可播",
+          "groupName": "正片",
+          "maxItems": 200,
+          "concurrency": 6,
+          "cacheTtlMs": 1800000
+        }
+      }
+    }
+  },
+  "pages": [
+    {
+      "id": "home",
+      "title": "Bilibili",
+      "layout": {
+        "type": "poster_grid",
+        "columns": 2,
+        "gap": 12,
+        "ratio": "16:9"
+      },
+      "feed": "homeFeed",
+      "viewModes": [
+        "poster_grid",
+        "list_linear"
+      ],
+      "channels": [
+        {
+          "id": "home",
+          "title": "首页",
+          "feed": "homeFeed"
+        },
+        {
+          "id": "popular",
+          "title": "热门",
+          "feed": "popularFeed"
+        },
+        {
+          "id": "movie",
+          "title": "电影",
+          "feed": "movieFeed"
+        },
+        {
+          "id": "tv",
+          "title": "电视剧",
+          "feed": "tvFeed"
+        },
+        {
+          "id": "animation",
+          "title": "动画",
+          "feed": "animationFeed"
+        },
+        {
+          "id": "documentary",
+          "title": "纪录片",
+          "feed": "documentaryFeed"
+        },
+        {
+          "id": "music",
+          "title": "音乐",
+          "feed": "musicFeed"
+        }
+      ],
+      "card": {
+        "style": "poster",
+        "image": "poster",
+        "title": "title",
+        "subtitle": "subtitle",
+        "action": {
+          "type": "detail"
+        }
+      }
+    },
+    {
+      "id": "detail",
+      "title": "视频详情",
+      "layout": {
+        "type": "detail",
+        "resource": "videoDetail",
+        "ratio": "16:9",
+        "expandLines": 4
+      }
+    }
+  ],
+  "playback": {
+    "strategy": "direct",
+    "headers": {
+      "Referer": "https://www.bilibili.com/",
+      "Origin": "https://www.bilibili.com",
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36"
+    }
+  },
+  "theme": {
+    "mode": "dark",
+    "primary": "#FB7299",
+    "background": "#0F1117",
+    "surface": "#171A21",
+    "onSurface": "#E9ECF2",
+    "accent": "#00AEEC",
+    "cornerRadius": 12,
+    "density": "comfortable",
+    "posterColumns": 2,
+    "fontScale": 1.0
+  },
+  "flags": {
+    "enableSearch": false,
+    "enableHistory": true,
+    "enableFavorite": true,
+    "allowCleartext": false
+  }
+}
