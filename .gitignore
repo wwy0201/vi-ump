@@ -33,3 +33,10 @@ keystore.properties
 keystore/
 *.jks
 *.keystore
+# 示例源：仓库只保留 4 份技术测试样本，其余源文件只在开发者本地、不进版本控制
+samples/*
+!samples/bilibili.json
+!samples/bing-wallpaper.json
+!samples/youtube.json
+!samples/itunes-audio.json
+!samples/fixtures/

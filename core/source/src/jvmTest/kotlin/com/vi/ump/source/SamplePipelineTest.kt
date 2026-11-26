@@ -35,13 +35,23 @@ class SamplePipelineTest {
 
     private fun sample(relative: String): File = File(repoRoot(), "samples/$relative")
 
+    /**
+     * 仓库只保留 4 份公开样本；其余源（如 qq-video.json / douyin.json）只在开发者本地。
+     * 依赖这些本地源的用例在文件不存在时跳过，而不是让干净克隆下的测试套件变红。
+     */
+    private fun localSampleOrSkip(relative: String): File {
+        val file = sample(relative)
+        org.junit.Assume.assumeTrue("本地样本不存在，跳过：samples/$relative", file.isFile)
+        return file
+    }
+
     private fun pipelineOf(
         configName: String,
         body: String,
         contentType: String,
         onRequest: (String) -> Unit = {},
     ): SourcePipeline {
-        val schema = ConfigCompiler.loadAndCompile(sample(configName).readText())
+        val schema = ConfigCompiler.loadAndCompile(localSampleOrSkip(configName).readText())
         val client = HttpClient(
             MockEngine { request ->
                 onRequest(request.url.toString())

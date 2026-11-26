@@ -27,7 +27,10 @@ class DouyinLiveTest {
     @Ignore
     @Test
     fun recommendFeedLoads() = runBlocking {
-        val text = File(repoRoot(), "samples/douyin.json").readText()
+        // douyin.json 只在开发者本地（仓库不保留），没有这份样本就跳过
+        val file = File(repoRoot(), "samples/douyin.json")
+        org.junit.Assume.assumeTrue("本地样本不存在，跳过：samples/douyin.json", file.isFile)
+        val text = file.readText()
         val schema = ConfigCompiler.loadAndCompile(text)
         val pipeline = SourcePipeline(schema, HttpFetcher(createHttpClient()))
         val page = pipeline.list("recommend", 1)

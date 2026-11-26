@@ -75,7 +75,10 @@ class SampleConfigTest {
 
     @Test
     fun qqSampleStripsTheNonStandardJsonEnvelope() {
-        val schema = ConfigCompiler.loadAndCompile(sample("qq-video.json").readText())
+        // qq-video.json 只在开发者本地（仓库不保留），没有这份样本就跳过
+        val qqSample = sample("qq-video.json")
+        org.junit.Assume.assumeTrue("本地样本不存在，跳过：samples/qq-video.json", qqSample.isFile)
+        val schema = ConfigCompiler.loadAndCompile(qqSample.readText())
         val feed = assertNotNull(schema.feeds["episodeQuality"], "qq-video.json 缺少 episodeQuality")
         val strip = assertNotNull(feed.strip, "strip 未编译成功：QZOutputJson 外壳将无法解析")
 
