@@ -571,7 +571,18 @@ url 模板渲染 → encrypt（params：URL query 同名参数替换成密文并
 "strip": { "prefix": "`VAR=`", "suffix": ";" }
 ```
 
-执行顺序固定为 `trim → 去 prefix → 去 suffix → trim`。`prefix` 与 `suffix` 不能同时为空（E002）。
+执行顺序固定为 `trim → 定位 prefix（首次出现）→ 取其后 → 定位 suffix（其后首次出现）→ 取其前 → trim`。`prefix` 与 `suffix` 不能同时为空（E002）。
+
+两个语义要说清：`prefix` / `suffix` 是**在整段响应里找锚点**，不是"必须贴着首尾"，所以既能剥 `VAR={…};` 这种外壳，也能从一整页 HTML 里把内嵌的 JSON 挖出来：
+
+```jsonc
+// 页面里 var ytInitialData = {...};</script> 后面还跟着几 MB HTML
+"strip": { "prefix": "var ytInitialData = ", "suffix": ";</script>" },
+"responseType": "json",
+"list": "$..lockupViewModel"
+```
+
+锚点找不到就**原样保留整段响应**，由下游按"解析不出 JSON → 0 条"降级，而不是抛异常把页面打成错误页。
 
 **5.4.1 锚点怎么选（实测踩过的三个坑）**
 
@@ -793,7 +804,7 @@ url 模板渲染 → encrypt（params：URL query 同名参数替换成密文并
 |---|---|---|
 | body 里多带字段 | 一律 `{"status":0,"msg":"播放参数无效"}`，`data` 是空数组 | 只发 `{}`；集号只能走 URL，塞进 body 必然失败 |
 | 想从响应里拼集名 | 该接口不返回集名，只回一个整数 `ep` | 用 `kind=template` + `parts:["{{$.ep}}"]` 配 `prefix/suffix` 生成"第N集" |
-| 想用 `{{url}}` / `{{imageBase}}` 这类变量 | 子项字段的抽取**不带变量作用域**，`prefix/suffix` 也不走模板渲染（只有 `request.url/body/headers` 会渲染 `{{}}`） | 字段里的值只能来自 `{{$.path}}`（当前子项 payload）；基址要拼就写进 `request.url`，别写进 `prefix` |
+| 想用 `{{url}}` / `{{imageBase}}` 这类变量 | 子项字段的 `{{$.path}}` 只能来自当前子项 payload | 字段抽取带请求变量作用域（`{{baseUrl}}` / `{{id}}` / 页面 `params` 都可用），基址可以直接拼在 template 里；`prefix/suffix` 不走模板渲染 |
 
 **(3) 签名地址的有效期比默认缓存短**
 

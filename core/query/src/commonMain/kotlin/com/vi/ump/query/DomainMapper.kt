@@ -26,13 +26,14 @@ object DomainMapper {
         payload: Payload,
         htmlSelector: HtmlSelector = NoHtmlSelector,
         cryptoByField: Map<String, CryptoOptions> = emptyMap(),
+        scope: Map<String, String> = emptyMap(),
     ): Map<DomainField, Any?> {
         val out = linkedMapOf<DomainField, Any?>()
         for ((key, spec) in fields) {
             val field = DomainField.fromKey(key)
                 ?: throw QueryException(QueryError.UNDEFINED_FIELD, "未定义的域字段 `$key`")
 
-            val raws = Extractors.of(spec, htmlSelector).extract(payload)
+            val raws = Extractors.of(spec, htmlSelector).extract(payload, scope)
             val transformed = raws.mapNotNull { TransformChain.apply(it, spec, cryptoByField[key]) }
 
             var value: Any? = when {
@@ -87,8 +88,9 @@ object DomainMapper {
         payload: Payload,
         htmlSelector: HtmlSelector = NoHtmlSelector,
         cryptoByField: Map<String, CryptoOptions> = emptyMap(),
+        scope: Map<String, String> = emptyMap(),
     ): MediaSummary? {
-        val values = mapFields(fields, payload, htmlSelector, cryptoByField)
+        val values = mapFields(fields, payload, htmlSelector, cryptoByField, scope)
         for ((key, spec) in fields) {
             if (!spec.required) continue
             val field = DomainField.fromKey(key) ?: continue

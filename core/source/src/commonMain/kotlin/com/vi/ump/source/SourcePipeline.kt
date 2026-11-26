@@ -140,7 +140,7 @@ class SourcePipeline(
         val seenIds = HashSet<String>(parsed.payloads.size)
         var skipped = 0
         for (p in parsed.payloads) {
-            val item = DomainMapper.mapItem(specs, p, htmlSelector, cryptos)
+            val item = DomainMapper.mapItem(specs, p, htmlSelector, cryptos, vars)
             if (item == null) {
                 skipped++
             } else if (item.id.isNotBlank() && !seenIds.add(item.id)) {
@@ -226,7 +226,7 @@ class SourcePipeline(
         val payload = detailPayload(res, body) ?: return null
 
         val specs = renderedSpecs(res, vars)
-        val values = DomainMapper.mapFields(specs, payload, htmlSelector, cryptoByField(res))
+        val values = DomainMapper.mapFields(specs, payload, htmlSelector, cryptoByField(res), vars)
         val summary = DomainMapper.toSummary(values) ?: return null
 
         // 两条分组通路：`episodes`（id 表 + 逐条，腾讯那种）在前，`tracks`（响应内直接切）在后。
@@ -906,15 +906,40 @@ class SourcePipeline(
         }.toMap()
 
     /**
-     * 剥掉响应体两端的外壳。腾讯 `getinfo` 返回 `QZOutputJson={…};`，
-     * 剥完才是一段合法 JSON，否则 `json.parseToJsonElement` 必然失败。
+     * 剥掉响应体的外壳，取 `prefix … suffix` 之间的那一段。
+     *
+     * 两种线上形态都要吃：
+     *  - 整段就是一个 `VAR={…};`（外壳贴着首尾）；
+     *  - 页面里内嵌一坨 JSON（`var ytInitialData = {…};</script>`），前后还跟着几 MB 的 HTML。
+     *
+     * 所以 prefix 用「首次出现」定位而不是 `removePrefix`。suffix 则不能盲取首次出现——
+     * `VAR={…};` 这种外壳里，JSON 字符串内部常常也带分号（实测某个详情接口第一个 `;`
+     * 出现在第 106 个字符）。判据是「切到这里之后能不能解析成 JSON」：先试首个命中，
+     * 再试末个命中，都解析不了才退回首个命中（密文/纯文本响应本来就不是 JSON）。
      */
     private fun stripBody(body: String, strip: StripSpec?): String {
         if (strip == null) return body
         var s = body.trim()
-        strip.prefix?.takeIf { it.isNotEmpty() }?.let { s = s.removePrefix(it) }
-        strip.suffix?.takeIf { it.isNotEmpty() }?.let { s = s.removeSuffix(it) }
-        return s.trim()
+        strip.prefix?.takeIf { it.isNotEmpty() }?.let { p ->
+            val i = s.indexOf(p)
+            if (i >= 0) s = s.substring(i + p.length).trim()
+        }
+        strip.suffix?.takeIf { it.isNotEmpty() }?.let { suf ->
+            val first = s.indexOf(suf)
+            val last = s.lastIndexOf(suf)
+            val candidates = if (last > first) listOf(first, last) else listOf(first)
+            var chosen = first
+            for (c in candidates) {
+                if (c < 0) continue
+                val cut = s.substring(0, c).trim()
+                if (runCatching { json.parseToJsonElement(cut) }.isSuccess) {
+                    chosen = c
+                    break
+                }
+            }
+            if (chosen >= 0) s = s.substring(0, chosen).trim()
+        }
+        return s
     }
 
     /** 一次响应的解析结果：条目列表 + 原文档与 root 后的锚点（只有 JSON 通路才有） */

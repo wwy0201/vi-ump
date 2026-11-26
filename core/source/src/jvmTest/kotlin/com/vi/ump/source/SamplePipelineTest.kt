@@ -19,7 +19,7 @@ import kotlin.test.assertTrue
  * 用 `samples` 里的**真实站点配置** + `samples/fixtures` 里的**真实响应快照**跑整条管线。
  *
  * 这两组数据覆盖了 JSON 之外的两个真实形态：
- *  - YouTube：Atom 1.0 XML → `listSplit` 文本分条
+ *  - YouTube：整页 HTML 里内嵌 `var ytInitialData = {...};` → `strip` 挖出 JSON 再走 JSONPath
  *  - 腾讯视频：`QZOutputJson={...};` 非标准 JSON → `strip` 剥壳后再走 JSONPath
  */
 class SamplePipelineTest {
@@ -66,34 +66,39 @@ class SamplePipelineTest {
     }
 
     @Test
-    fun youtubeAtomFeedIsSplitIntEntries() = runTest {
+    fun youtubeWebPageJsonIsReusedAsFeed() = runTest {
         var seenUrl = ""
         val pipeline = pipelineOf(
             configName = "youtube.json",
-            body = sample("fixtures/youtube-feed.xml").readText(),
-            contentType = "application/atom+xml",
+            body = sample("fixtures/youtube-home.txt").readText(),
+            contentType = "text/html",
         ) { seenUrl = it }
 
-        val page = pipeline.list("channelUploads", 1, mapOf("channelId" to "UC_x5XG1OV2P6uZZ5FSM9Ttw"))
+        // 栏目切换 = 换页面路径（`{{p.path}}`），同一个资源、同一套抽取规则
+        val page = pipeline.list(
+            "channelFeed",
+            1,
+            mapOf("path" to "/results?search_query=%E7%83%AD%E9%97%A8&sp=EgIQAQ%253D%253D&hl=zh-CN&gl=SG"),
+        )
 
         assertEquals(
-            "https://www.youtube.com/feeds/videos.xml?channel_id=UC_x5XG1OV2P6uZZ5FSM9Ttw",
+            "https://www.youtube.com/results?search_query=%E7%83%AD%E9%97%A8&sp=EgIQAQ%253D%253D&hl=zh-CN&gl=SG",
             seenUrl,
-            "页面参数没有渲染进 URL",
+            "栏目页 URL 没渲染对",
         )
-        assertEquals(3, page.items.size, "三条 <entry> 应切成三条条目")
+        assertEquals(3, page.items.size, "fixture 里三个 videoRenderer 应切成三条条目")
         assertEquals(0, page.skipped, "不应有条目因缺必填字段被跳过")
 
         val first = page.items[0]
-        assertEquals("dQw4w9WgXcQ", first.id)
-        assertEquals("Building with the Gemini API", first.title)
-        assertEquals("https://i4.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg", first.poster)
-        assertEquals("https://www.youtube.com/watch?v=dQw4w9WgXcQ", first.playUrl)
-        assertEquals("Google for Developers", first.subtitle)
-        assertEquals(2026, first.year)
+        assertEquals("xDHKAIr5IL4", first.id)
+        assertTrue(first.title.startsWith("2026 流行歌曲"), "标题没抽到，实际：${first.title}")
+        assertTrue(
+            first.poster!!.startsWith("https://i.ytimg.com/vi/xDHKAIr5IL4/"),
+            "封面路径变了，实际：${first.poster}",
+        )
+        assertEquals("https://www.youtube.com/watch?v=xDHKAIr5IL4", first.playUrl)
+        assertEquals("音乐盒", first.subtitle)
         assertEquals(MediaKind.VIDEO, first.kind)
-        // Shorts 的链接形态不同，说明条目是各自独立解析的
-        assertEquals("https://www.youtube.com/shorts/aBcDeF12345", page.items[2].playUrl)
     }
 
     @Test

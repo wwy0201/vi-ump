@@ -61,15 +61,30 @@ class SampleConfigTest {
     }
 
     @Test
-    fun youtubeSampleUsesTextSplitInsteadOfJsonPath() {
+    fun youtubeSampleExtractsWebPageJsonFromHtml() {
         val schema = ConfigCompiler.loadAndCompile(sample("youtube.json").readText())
-        val feed = assertNotNull(schema.feeds["channelUploads"], "youtube.json 缺少 channelUploads")
+        val feed = assertNotNull(schema.feeds["channelFeed"], "youtube.json 缺少 channelFeed")
+        val strip = assertNotNull(feed.strip, "strip 未编译成功：页面里那坨 ytInitialData 挖不出来")
 
-        assertTrue(feed.isTextSplit, "Atom 是 XML，必须走 listSplit 文本通路")
-        assertNotNull(feed.listSplit, "listSplit 未编译成功")
+        assertEquals("var ytInitialData = ", strip.prefix, "strip.prefix 不是 ytInitialData 锚点")
+        assertEquals(";</script>", strip.suffix, "strip.suffix 不是脚本结束锚点")
+        assertTrue(!feed.isTextSplit, "剥完就是合法 JSON，应走 JSONPath 而不是 listSplit")
+        assertNotNull(feed.list, "list 路径未编译成功")
+
+        // 网页版首页栏目条：全部 / 播客 / 音乐 / 直播 / 游戏 / 合辑 / 喜剧短片
+        val home = assertNotNull(schema.pages.firstOrNull { it.id == "home" }, "缺少 home 页")
+        val titles = home.channels.map { it.title }
         assertEquals(
-            "{{baseUrl}}/feeds/videos.xml?channel_id={{p.channelId}}",
-            feed.request.urlTemplate,
+            listOf("全部", "播客", "音乐", "直播", "游戏", "合辑", "喜剧短片"),
+            titles,
+            "栏目条应与网页版一致，实际：$titles",
+        )
+
+        // 详情只能走 oEmbed：YouTube 没有按 id 取单条视频的公开接口
+        val detail = assertNotNull(schema.details["video"], "youtube.json 缺少 details.video")
+        assertTrue(
+            detail.request.urlTemplate.contains("/oembed"),
+            "详情应走 oEmbed，实际模板：${detail.request.urlTemplate}",
         )
     }
 

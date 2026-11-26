@@ -2,59 +2,55 @@
   "schemaVersion": "1.0",
   "meta": {
     "id": "youtube",
-    "name": "YouTube 频道",
+    "name": "YouTube 栏目",
     "author": "vi-ump-samples",
-    "version": "1.0.0",
+    "version": "2.0.0",
     "color": "#FF0033",
-    "description": "数据形态取自 https://www.youtube.com/feeds/videos.xml?channel_id=UC... 的真实 Atom 1.0 响应：最多 15 条、倒序、无分页参数。响应是 XML 而非 JSON，因此走 responseType=text + listSplit 文本分条，字段只能用 regex/const；带捕获组的 regex 必须显式 group=1，否则拿到的是整段标签。示例频道为 Kurzgesagt – In a Nutshell（UCsXVk37bltHxD1rDPwtNM8Q）；原先用的 Google Developers 频道（UC_x5XG1OV2P6uZZ5FSM9Ttw）已不再提供 feed，实测 404/500，换频道只需改 pages[home].params.channelId。注意：YouTube 没有按 id 取单条的公开接口，details 复用同一个 feed、只能拿到最新一条；playUrl 映射到的是 watch 页面链接而不是媒体直链（YouTube 不公开直链），因此 YouTube 条目进播放页会得到播放器报错，这是站点限制而非 App 缺陷。"
+    "description": "按网页版首页栏目条组织：全部 / 播客 / 音乐 / 直播 / 游戏 / 合辑 / 喜剧短片。每个栏目对应一个真实的 YouTube 页面（热门视频搜索、`/podcasts`、音乐搜索、`/live`、游戏搜索、合集搜索、喜剧短片搜索），页面是 HTML，条目数据内嵌在 `var ytInitialData = {...};` 里：配置用 strip 的 prefix/suffix 把这段 JSON 挖出来再走 JSONPath（引擎按锚点定位，不要求贴住首尾），所以标题、封面、作者都是页面当时下发的内容，不再受 Atom feed「标题永远是频道原始语言」的限制。三点要说清：(1) 网页版首页那条「你账号的中文推荐」需要登录态，本示例刻意不带 Cookie——浏览器会话 Cookie 注入第三方客户端后，Google 会把它当作会话盗用并轮换掉（实测复制后约半小时内失效，浏览器那边也可能被登出），不建议日常这么用，所以「全部」栏目改成了公开的热门视频搜索，效果接近但不等于个性化推荐；(2) 栏目页在未登录与登录状态下下发的条目结构不同（未登录是 `videoRenderer`，登录后是 `lockupViewModel`），本配置按未登录形态抽取，带 Cookie 反而会取空；(3) YouTube 没有按 id 取单条视频的公开接口，详情走 oEmbed（只有标题/作者/封面），`playUrl` 映射到 watch 页面而不是媒体直链，条目进播放页会得到播放器报错——这是站点限制而非 App 缺陷。"
   },
   "runtime": {
     "baseUrl": "https://www.youtube.com",
     "headers": {
-      "User-Agent": "Mozilla/5.0 (Linux; Android 14; Mobile)",
-      "Accept-Language": "en-US,en;q=0.9"
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36",
+      "Accept-Language": "zh-CN,zh;q=0.9"
     },
     "encoding": "utf-8",
-    "timeoutMs": 15000,
+    "timeoutMs": 25000,
     "retry": 2
   },
   "resources": {
     "feeds": {
-      "channelUploads": {
+      "channelFeed": {
         "request": {
           "method": "GET",
-          "url": "{{baseUrl}}/feeds/videos.xml?channel_id={{p.channelId}}"
+          "url": "{{baseUrl}}{{p.path}}"
         },
-        "responseType": "text",
-        "listSplit": "(?s)<entry>(.*?)</entry>",
+        "responseType": "json",
+        "strip": { "prefix": "var ytInitialData = ", "suffix": ";</script>" },
+        "list": "$..videoRenderer",
         "fields": {
-          "id": { "kind": "regex", "pattern": "<yt:videoId>(.*?)</yt:videoId>", "group": 1 },
-          "title": { "kind": "regex", "pattern": "<title>(.*?)</title>", "group": 1 },
-          "poster": { "kind": "regex", "pattern": "<media:thumbnail[^>]*url=\"([^\"]+)\"", "group": 1 },
-          "playUrl": { "kind": "regex", "pattern": "<link[^>]*rel=\"alternate\"[^>]*href=\"([^\"]+)\"", "group": 1 },
-          "subtitle": { "kind": "regex", "pattern": "(?s)<author>\\s*<name>(.*?)</name>", "group": 1 },
-          "year": { "kind": "regex", "pattern": "<published>([0-9]{4})-", "group": 1, "type": "int" },
+          "id": { "from": "$.videoId" },
+          "title": { "from": "$.title.runs[0].text" },
+          "poster": { "from": "$.thumbnail.thumbnails[-1].url" },
+          "playUrl": { "kind": "template", "parts": ["{{baseUrl}}/watch?v=", "{{$.videoId}}"] },
+          "subtitle": { "from": "$.ownerText.runs[0].text" },
           "kind": { "kind": "const", "from": "video" }
-        },
-        "paging": { "mode": "page", "maxPage": 1 }
+        }
       }
     },
     "details": {
       "video": {
         "request": {
           "method": "GET",
-          "url": "{{baseUrl}}/feeds/videos.xml?channel_id={{p.channelId}}"
+          "url": "{{baseUrl}}/oembed?url=https%3A%2F%2Fwww.youtube.com%2Fwatch%3Fv%3D{{id}}&format=json"
         },
-        "responseType": "text",
-        "listSplit": "(?s)<entry>(.*?)</entry>",
+        "responseType": "json",
         "fields": {
-          "id": { "kind": "regex", "pattern": "<yt:videoId>(.*?)</yt:videoId>", "group": 1 },
-          "title": { "kind": "regex", "pattern": "<title>(.*?)</title>", "group": 1 },
-          "poster": { "kind": "regex", "pattern": "<media:thumbnail[^>]*url=\"([^\"]+)\"", "group": 1 },
-          "playUrl": { "kind": "regex", "pattern": "<link[^>]*rel=\"alternate\"[^>]*href=\"([^\"]+)\"", "group": 1 },
-          "subtitle": { "kind": "regex", "pattern": "(?s)<author>\\s*<name>(.*?)</name>", "group": 1 },
-          "year": { "kind": "regex", "pattern": "<published>([0-9]{4})-", "group": 1, "type": "int" },
-          "description": { "kind": "regex", "pattern": "(?s)<media:description>(.*?)</media:description>", "group": 1 },
+          "id": { "kind": "template", "parts": ["{{id}}"] },
+          "title": { "from": "$.title" },
+          "subtitle": { "from": "$.author_name" },
+          "poster": { "from": "$.thumbnail_url" },
+          "playUrl": { "kind": "template", "parts": ["{{baseUrl}}/watch?v=", "{{id}}"] },
           "kind": { "kind": "const", "from": "video" }
         }
       }
@@ -65,8 +61,16 @@
       "id": "home",
       "title": "YouTube",
       "layout": { "type": "poster_grid", "columns": 3, "ratio": "16:9", "gap": 12 },
-      "feed": "channelUploads",
-      "params": { "channelId": "UCsXVk37bltHxD1rDPwtNM8Q" },
+      "feed": "channelFeed",
+      "channels": [
+        { "id": "all", "title": "全部", "feed": "channelFeed", "params": { "path": "/results?search_query=%E7%83%AD%E9%97%A8&sp=EgIQAQ%253D%253D&hl=zh-CN&gl=SG" } },
+        { "id": "podcasts", "title": "播客", "feed": "channelFeed", "params": { "path": "/podcasts?hl=zh-CN&gl=SG" } },
+        { "id": "music", "title": "音乐", "feed": "channelFeed", "params": { "path": "/results?search_query=%E9%9F%B3%E4%B9%90&sp=EgIQAQ%253D%253D&hl=zh-CN&gl=SG" } },
+        { "id": "live", "title": "直播", "feed": "channelFeed", "params": { "path": "/live?hl=zh-CN&gl=SG" } },
+        { "id": "gaming", "title": "游戏", "feed": "channelFeed", "params": { "path": "/results?search_query=%E6%B8%B8%E6%88%8F&sp=EgIQAQ%253D%253D&hl=zh-CN&gl=SG" } },
+        { "id": "compilations", "title": "合辑", "feed": "channelFeed", "params": { "path": "/results?search_query=%E5%90%88%E9%9B%86&sp=EgIQAQ%253D%253D&hl=zh-CN&gl=SG" } },
+        { "id": "comedy-shorts", "title": "喜剧短片", "feed": "channelFeed", "params": { "path": "/results?search_query=%E5%96%9C%E5%89%A7%E7%9F%AB%E7%89%87&sp=EgIQAQ%253D%253D&hl=zh-CN&gl=SG" } }
+      ],
       "card": {
         "style": "poster",
         "image": "poster",
@@ -85,7 +89,7 @@
     "strategy": "direct",
     "headers": {
       "Referer": "https://www.youtube.com/",
-      "User-Agent": "Mozilla/5.0 (Linux; Android 14; Mobile)"
+      "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Safari/537.36"
     }
   },
   "theme": {
