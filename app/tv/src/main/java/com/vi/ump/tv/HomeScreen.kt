@@ -1,23 +1,25 @@
 package com.vi.ump.tv
 
-import android.graphics.Color
-import android.view.Gravity
-import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
-import android.widget.BaseAdapter
 import android.widget.LinearLayout
-import android.widget.ListView
+import android.widget.ScrollView
 import android.widget.TextView
 import java.io.File
 
-/** 源管理 / 启动页。没有源时给出可操作的导入路径，而不是一屏空白。 */
+/**
+ * 源管理 / 启动页。没有源时给出可操作的导入路径，而不是一屏空白。
+ *
+ * 源列表刻意不用 ListView：4.4 盒子上 ListView 的选中高亮（selector）在非触摸模式下不稳定，
+ * 改「行自己可聚焦」又会让 ListView 自己的方向键导航失效。这里用 ScrollView + 可聚焦行：
+ * 高亮随焦点走、方向键逐行移动，遥控器上所见即所得。
+ */
 class HomeScreen(private val host: TvHost) : TvScreen {
 
     private val ctx = host as android.content.Context
     private val root: LinearLayout
     private val status: TextView
-    private val list: ListView
+    private val rows: LinearLayout
     private val importButton: TextView
     private val sources = mutableListOf<TvSource>()
 
@@ -52,18 +54,15 @@ class HomeScreen(private val host: TvHost) : TvScreen {
                 ctx.matchWrap(top = 10),
             )
 
-            list = ctx.tvListView().apply {
-                setOnItemClickListener { _, _, position, _ -> open(position) }
-                setOnKeyListener { _, keyCode, event ->
-                    if (event.action == KeyEvent.ACTION_UP &&
-                        (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER)
-                    ) {
-                        open(selectedItemPosition)
-                        true
-                    } else false
-                }
+            rows = ctx.tvScrollRows()
+            val scroll = ScrollView(ctx).apply {
+                isVerticalScrollBarEnabled = false
+                addView(rows, ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ))
             }
-            root.addView(list, ctx.fill(top = 8))
+            root.addView(scroll, ctx.fill(top = 8))
         }
     }
 
@@ -74,19 +73,48 @@ class HomeScreen(private val host: TvHost) : TvScreen {
     }
 
     override fun requestInitialFocus() {
-        if (sources.isNotEmpty()) list.requestFocus() else importButton.requestFocus()
+        val first = if (sources.isNotEmpty()) rows.getChildAt(0) else null
+        if (first != null && first.requestFocus()) return
+        importButton.requestFocus()
     }
 
     private fun refresh() {
         sources.clear()
         sources += TvSourceStore.list(ctx)
-        list.adapter = SourceAdapter()
+        rows.removeAllViews()
+        sources.forEachIndexed { index, s ->
+            if (index > 0) {
+                rows.addView(
+                    with(TvUi) { ctx.tvDivider() },
+                    LinearLayout.LayoutParams(ViewGroup.LayoutParams.MATCH_PARENT, ctx.dp(1)),
+                )
+            }
+            rows.addView(
+                buildRow(index, s),
+                LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ),
+            )
+        }
         status.text = if (sources.isEmpty()) {
             "还没有数据源。把 JSON 推到 /sdcard/Download/，再点「从 Download 导入」。"
         } else {
-            "共 ${sources.size} 个数据源。选择一项进入首页。"
+            "共 ${sources.size} 个数据源。方向键选择，OK 进入首页。"
         }
-        if (sources.isNotEmpty()) list.setSelection(0)
+    }
+
+    private fun buildRow(index: Int, s: TvSource): View = with(TvUi) {
+        ctx.tvListRow { open(index) }.apply {
+            addView(
+                ctx.tvText(s.label + (s.version?.let { "  v$it" } ?: ""), 19f, TEXT),
+                ctx.matchWrap(),
+            )
+            addView(
+                ctx.tvText("${s.id}  ·  ${s.file.name}", 13f, TEXT_DIM),
+                ctx.matchWrap(top = 3),
+            )
+        }
     }
 
     private fun open(position: Int) {
@@ -124,35 +152,8 @@ class HomeScreen(private val host: TvHost) : TvScreen {
                 } else {
                     "导入 $ok 个；失败 ${errors.size} 个：${errors.take(2).joinToString("；")}"
                 }
+                requestInitialFocus()
             }
-        }
-    }
-
-    private inner class SourceAdapter : BaseAdapter() {
-        override fun getCount(): Int = sources.size
-        override fun getItem(position: Int): Any = sources[position]
-        override fun getItemId(position: Int): Long = position.toLong()
-
-        override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
-            val row = (convertView as? LinearLayout) ?: with(TvUi) {
-                ctx.column().apply {
-                    setPadding(ctx.dp(18), ctx.dp(12), ctx.dp(18), ctx.dp(12))
-                    isFocusable = false
-                }
-            }
-            row.removeAllViews()
-            val s = sources[position]
-            row.addView(
-                with(TvUi) {
-                    ctx.tvText(s.label + (s.version?.let { "  v$it" } ?: ""), 19f, TEXT)
-                },
-                with(TvUi) { ctx.matchWrap() },
-            )
-            row.addView(
-                with(TvUi) { ctx.tvText("${s.id}  ·  ${s.file.name}", 13f, TEXT_DIM) },
-                with(TvUi) { ctx.matchWrap(top = 3) },
-            )
-            return row
         }
     }
 }

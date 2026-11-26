@@ -95,6 +95,43 @@ object TvUi {
         }
     }
 
+    /**
+     * 可聚焦的列表行。TV 端所有「一行一条」的列表统一用它，不要再用 ListView：
+     * 4.4 盒子上 ListView 的选中高亮（selector）在非触摸模式下不绘制，方向键其实在切换选中项，
+     * 屏幕上却看不出变化，表现就是「遥控器按了没反应」。行自己可聚焦 + 自绘焦点底色，所见即所得。
+     */
+    fun Context.tvListRow(onClick: () -> Unit): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setPadding(dp(18), dp(10), dp(18), dp(10))
+        isFocusable = true
+        isFocusableInTouchMode = true
+        isClickable = true
+        background = focusBackground(Color.TRANSPARENT, SURFACE_FOCUS, 6)
+        setOnClickListener { onClick() }
+        // 4.4 盒子对 OK 键转 click 的支持不一致，显式兜底
+        setOnKeyListener { _, keyCode, event ->
+            if (event.action == KeyEvent.ACTION_UP &&
+                (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER)
+            ) {
+                performClick()
+                true
+            } else {
+                false
+            }
+        }
+    }
+
+    /** 行之间的分隔线 */
+    fun Context.tvDivider(): View = View(this).apply {
+        setBackgroundColor(Color.rgb(36, 36, 42))
+    }
+
+    /** 把行列表装进 ScrollView 的容器：宽度撑满、高度自适应，外层负责滚动。 */
+    fun Context.tvScrollRows(): LinearLayout = LinearLayout(this).apply {
+        orientation = LinearLayout.VERTICAL
+        setBackgroundColor(BG)
+    }
+
     fun Context.tvListView(): ListView = ListView(this).apply {
         setBackgroundColor(BG)
         divider = GradientDrawable().apply { setColor(Color.rgb(36, 36, 42)) }

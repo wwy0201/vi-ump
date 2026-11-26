@@ -72,7 +72,16 @@ class FeedScreen(
                 verticalSpacing = ctx.dp(12)
                 stretchMode = GridView.STRETCH_COLUMN_WIDTH
                 setBackgroundColor(TvUi.BG)
-                setSelector(with(TvUi) { ctx.focusBackground(Color.TRANSPARENT, TvUi.SURFACE_FOCUS, 6) })
+                // 卡片自带不透明底色，GridView 的 selector 画在卡片下面会被完全盖住（4.4 上就是这样，
+                // 焦点在网格里却看不到任何高亮）。改成只描边的 selector 并画在最上层。
+                setSelector(with(TvUi) {
+                    android.graphics.drawable.GradientDrawable().apply {
+                        setColor(Color.TRANSPARENT)
+                        cornerRadius = ctx.dp(10).toFloat()
+                        setStroke(ctx.dp(2), TvUi.ACCENT)
+                    }
+                })
+                setDrawSelectorOnTop(true)
                 isFocusable = true
                 isFocusableInTouchMode = true
                 setPadding(0, ctx.dp(4), 0, ctx.dp(8))

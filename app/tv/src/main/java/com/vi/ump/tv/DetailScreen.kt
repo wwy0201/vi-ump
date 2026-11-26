@@ -2,12 +2,10 @@ package com.vi.ump.tv
 
 import android.text.TextUtils
 import android.view.Gravity
-import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
-import android.widget.BaseAdapter
 import android.widget.LinearLayout
-import android.widget.ListView
+import android.widget.ScrollView
 import android.widget.TextView
 import com.vi.ump.model.MediaDetail
 import com.vi.ump.model.MediaKind
@@ -29,7 +27,7 @@ class DetailScreen(
     private val ctx = host as android.content.Context
     private val root: LinearLayout
     private val status: TextView
-    private val list: ListView
+    private val listRows: LinearLayout
     private val retry: TextView
     private var detail: MediaDetail? = null
     private var loading = false
@@ -70,18 +68,18 @@ class DetailScreen(
             }
             root.addView(status, ctx.matchWrap(top = 2))
 
-            list = ctx.tvListView().apply {
-                setOnItemClickListener { _, _, position, _ -> open(position) }
-                setOnKeyListener { _, keyCode, event ->
-                    if (event.action == KeyEvent.ACTION_UP &&
-                        (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER)
-                    ) {
-                        open(selectedItemPosition)
-                        true
-                    } else false
-                }
-            }
-            root.addView(list, ctx.fill(top = 6))
+            // 剧集/分组列表用 ScrollView + 可聚焦行（同 HomeScreen），4.4 上 ListView 的高亮不可见
+            listRows = ctx.tvScrollRows()
+            root.addView(
+                ScrollView(ctx).apply {
+                    isVerticalScrollBarEnabled = false
+                    addView(listRows, ViewGroup.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT,
+                        ViewGroup.LayoutParams.WRAP_CONTENT,
+                    ))
+                },
+                ctx.fill(top = 6),
+            )
         }
     }
 
@@ -92,7 +90,8 @@ class DetailScreen(
     }
 
     override fun requestInitialFocus() {
-        if (rows.isNotEmpty()) list.requestFocus() else retry.requestFocus()
+        if (listRows.getChildAt(0)?.requestFocus() == true) return
+        retry.requestFocus()
     }
 
     private fun load() {
@@ -112,8 +111,7 @@ class DetailScreen(
             rows.clear()
             val groups = effectiveGroups(detail!!)
             rows += Row(0, 0, item.title.ifBlank { "播放" }, "直接播放", playable = true)
-            list.adapter = TrackAdapter()
-            list.setSelection(0)
+            rebuildRows()
             if (autoOpen && !opened) {
                 opened = true
                 host.openPlayer(session, PlayTarget(item, groups, 0, 0))
@@ -184,8 +182,7 @@ class DetailScreen(
         if (rows.isEmpty()) {
             status.text = status.text.toString() + "\n这一条没有可打开的图集/剧集。"
         }
-        list.adapter = TrackAdapter()
-        list.setSelection(0)
+        rebuildRows()
         requestInitialFocus()
 
         if (autoOpen && !opened) {
@@ -273,25 +270,31 @@ class DetailScreen(
         }
     }
 
-    private inner class TrackAdapter : BaseAdapter() {
-        override fun getCount(): Int = rows.size
-        override fun getItem(position: Int): Any = rows[position]
-        override fun getItemId(position: Int): Long = position.toLong()
-
-        override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
-            val row = rows[position]
-            val view = (convertView as? LinearLayout) ?: with(TvUi) {
-                ctx.column().apply {
-                    setPadding(ctx.dp(18), ctx.dp(10), ctx.dp(18), ctx.dp(10))
-                    isFocusable = false
+    /** 把 [rows] 里的每一行渲染成可聚焦行；分隔线 + 焦点底色，和源列表同一套视觉。 */
+    private fun rebuildRows() {
+        listRows.removeAllViews()
+        rows.forEachIndexed { index, row ->
+            if (index > 0) {
+                listRows.addView(with(TvUi) { ctx.tvDivider() }, ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    with(TvUi) { ctx.dp(1) },
+                ))
+            }
+            val view = with(TvUi) {
+                ctx.tvListRow { open(index) }.apply {
+                    addView(
+                        ctx.tvText(row.title, 18f, if (row.playable) TvUi.TEXT else TvUi.TEXT_DIM),
+                        ctx.matchWrap(),
+                    )
+                    if (row.subtitle.isNotBlank()) {
+                        addView(ctx.tvText(row.subtitle, 13f, TvUi.TEXT_DIM), ctx.matchWrap(top = 3))
+                    }
                 }
             }
-            view.removeAllViews()
-            view.addView(with(TvUi) { ctx.tvText(row.title, 18f, if (row.playable) TvUi.TEXT else TvUi.TEXT_DIM) }, with(TvUi) { ctx.matchWrap() })
-            if (row.subtitle.isNotBlank()) {
-                view.addView(with(TvUi) { ctx.tvText(row.subtitle, 13f, TvUi.TEXT_DIM) }, with(TvUi) { ctx.matchWrap(top = 3) })
-            }
-            return view
+            listRows.addView(view, ViewGroup.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ))
         }
     }
 }

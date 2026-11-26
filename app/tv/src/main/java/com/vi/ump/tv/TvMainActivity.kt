@@ -10,6 +10,7 @@ import android.view.Gravity
 import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
+import android.view.ViewTreeObserver
 import android.view.WindowManager
 import android.widget.FrameLayout
 import android.widget.TextView
@@ -96,7 +97,18 @@ class TvMainActivity : Activity(), TvHost {
 
     override fun onKeyDown(keyCode: Int, event: KeyEvent): Boolean {
         if (current?.onKey(keyCode, event) == true) return true
+        // 兜底：切页后焦点没落下来时，先补焦点，遥控器至少不会整屏失灵
+        if (container.findFocus() == null && isDpadKey(keyCode)) {
+            ensureFocus(current ?: return super.onKeyDown(keyCode, event))
+        }
         return super.onKeyDown(keyCode, event)
+    }
+
+    private fun isDpadKey(keyCode: Int): Boolean = when (keyCode) {
+        KeyEvent.KEYCODE_DPAD_UP, KeyEvent.KEYCODE_DPAD_DOWN,
+        KeyEvent.KEYCODE_DPAD_LEFT, KeyEvent.KEYCODE_DPAD_RIGHT,
+        KeyEvent.KEYCODE_DPAD_CENTER, KeyEvent.KEYCODE_ENTER -> true
+        else -> false
     }
 
     // ── TvHost ────────────────────────────────────────────────
@@ -130,7 +142,29 @@ class TvMainActivity : Activity(), TvHost {
             ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT
         ))
         screen.onShow()
-        screen.view.post { screen.requestInitialFocus() }
+        // 4.4 盒子上 addView 之后首帧还没量完，立刻 requestFocus 会失败，
+        // 表现就是「页面出来了，遥控器完全按不动」。所以布局完成后再抢一次焦点。
+        screen.view.post { ensureFocus(screen) }
+        val observer = screen.view.viewTreeObserver
+        if (observer.isAlive) {
+            observer.addOnGlobalLayoutListener(object : ViewTreeObserver.OnGlobalLayoutListener {
+                override fun onGlobalLayout() {
+                    val vto = screen.view.viewTreeObserver
+                    if (vto.isAlive) vto.removeOnGlobalLayoutListener(this)
+                    ensureFocus(screen)
+                }
+            })
+        }
+    }
+
+    /** 当前页没有任何焦点时，按「首选落点 → 内容根视图」的顺序补一次，避免遥控器整屏失灵。 */
+    private fun ensureFocus(screen: TvScreen) {
+        if (container.findFocus() != null) return
+        screen.requestInitialFocus()
+        if (container.findFocus() != null) return
+        screen.view.isFocusable = true
+        screen.view.isFocusableInTouchMode = true
+        screen.view.requestFocus()
     }
 
     override fun openSource(source: TvSource) {

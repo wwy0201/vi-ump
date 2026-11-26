@@ -2,12 +2,10 @@ package com.vi.ump.tv
 
 import android.text.TextUtils
 import android.view.Gravity
-import android.view.KeyEvent
 import android.view.View
 import android.view.ViewGroup
-import android.widget.BaseAdapter
 import android.widget.LinearLayout
-import android.widget.ListView
+import android.widget.ScrollView
 import android.widget.TextView
 import com.vi.ump.model.MediaKind
 import com.vi.ump.model.MediaSummary
@@ -28,7 +26,8 @@ class SearchScreen(
     private val status: TextView
     private val keyboardPanel: LinearLayout
     private val historyBar: LinearLayout
-    private val results: ListView
+    private val results: ScrollView
+    private val resultRows: LinearLayout
     private val resultBar: LinearLayout
 
     private var query = ""
@@ -67,17 +66,15 @@ class SearchScreen(
             root.addView(keyboardPanel, ctx.matchWrap(top = 6))
             buildKeyboard()
 
-            results = ctx.tvListView().apply {
+            // 结果列表用 ScrollView + 可聚焦行（同 HomeScreen），4.4 上 ListView 的高亮不可见
+            resultRows = ctx.tvScrollRows()
+            results = ScrollView(ctx).apply {
                 visibility = View.GONE
-                setOnItemClickListener { _, _, position, _ -> open(position) }
-                setOnKeyListener { _, keyCode, event ->
-                    if (event.action == KeyEvent.ACTION_UP &&
-                        (keyCode == KeyEvent.KEYCODE_DPAD_CENTER || keyCode == KeyEvent.KEYCODE_ENTER)
-                    ) {
-                        open(selectedItemPosition)
-                        true
-                    } else false
-                }
+                isVerticalScrollBarEnabled = false
+                addView(resultRows, ViewGroup.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT,
+                    ViewGroup.LayoutParams.WRAP_CONTENT,
+                ))
             }
             resultBar = ctx.buttonBar(
                 ctx.tvButton("加载更多") { loadMore() },
@@ -231,7 +228,7 @@ class SearchScreen(
                     resultItems += fresh
                     page++
                     hasMore = paged.hasMore && fresh.isNotEmpty()
-                    (results.adapter as? SearchAdapter)?.notifyDataSetChanged()
+                    rebuildResultRows(keepFocus = true)
                     status.text = "已加载 ${resultItems.size} 条" + if (!hasMore) " · 已到底" else ""
                 }.onFailure { e ->
                     status.text = "加载失败：${e.message ?: e.javaClass.simpleName}"
@@ -246,12 +243,38 @@ class SearchScreen(
         historyBar.visibility = View.GONE
         results.visibility = View.VISIBLE
         resultBar.visibility = View.VISIBLE
-        results.adapter = SearchAdapter()
-        if (resultItems.isNotEmpty()) {
-            results.setSelection(0)
-            results.requestFocus()
-        } else {
-            (resultBar.getChildAt(0) as? View)?.requestFocus()
+        rebuildResultRows(keepFocus = false)
+    }
+
+    /** 重建结果行。[keepFocus] 为 true 时（加载更多）保持焦点在原来那一行上，不打断连续浏览。 */
+    private fun rebuildResultRows(keepFocus: Boolean) {
+        val focusedIndex = if (keepFocus) resultRows.indexOfChild(results.findFocus()) else -1
+        resultRows.removeAllViews()
+        resultItems.forEachIndexed { index, item ->
+            if (index > 0) {
+                resultRows.addView(with(TvUi) { ctx.tvDivider() }, LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, with(TvUi) { ctx.dp(1) },
+                ))
+            }
+            val row = with(TvUi) {
+                ctx.tvListRow { open(index) }.apply {
+                    addView(ctx.tvText(item.title, 18f, TvUi.TEXT), ctx.matchWrap())
+                    val sub = listOfNotNull(item.subtitle, item.type).joinToString(" · ")
+                    if (sub.isNotBlank()) {
+                        addView(ctx.tvText(sub, 13f, TvUi.TEXT_DIM), ctx.matchWrap(top = 3))
+                    }
+                }
+            }
+            resultRows.addView(row, LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.MATCH_PARENT,
+                ViewGroup.LayoutParams.WRAP_CONTENT,
+            ))
+        }
+        when {
+            focusedIndex >= 0 && focusedIndex < resultRows.childCount ->
+                resultRows.getChildAt(focusedIndex)?.requestFocus()
+            resultItems.isNotEmpty() -> resultRows.getChildAt(0)?.requestFocus()
+            else -> (resultBar.getChildAt(0) as? View)?.requestFocus()
         }
     }
 
@@ -259,28 +282,5 @@ class SearchScreen(
         val item = resultItems.getOrNull(position) ?: return
         // TV 没有"默认自动播放"设置：视频/音频点开即播，固定自动打开。
         host.openDetail(item, autoOpen = item.kind != MediaKind.IMAGE)
-    }
-
-    private inner class SearchAdapter : BaseAdapter() {
-        override fun getCount(): Int = resultItems.size
-        override fun getItem(position: Int): Any = resultItems[position]
-        override fun getItemId(position: Int): Long = position.toLong()
-
-        override fun getView(position: Int, convertView: View?, parent: ViewGroup?): View {
-            val item = resultItems[position]
-            val row = (convertView as? LinearLayout) ?: with(TvUi) {
-                ctx.column().apply {
-                    setPadding(ctx.dp(18), ctx.dp(10), ctx.dp(18), ctx.dp(10))
-                    isFocusable = false
-                }
-            }
-            row.removeAllViews()
-            row.addView(with(TvUi) { ctx.tvText(item.title, 18f, TvUi.TEXT) }, with(TvUi) { ctx.matchWrap() })
-            val sub = listOfNotNull(item.subtitle, item.type).joinToString(" · ")
-            if (sub.isNotBlank()) {
-                row.addView(with(TvUi) { ctx.tvText(sub, 13f, TvUi.TEXT_DIM) }, with(TvUi) { ctx.matchWrap(top = 3) })
-            }
-            return row
-        }
     }
 }
