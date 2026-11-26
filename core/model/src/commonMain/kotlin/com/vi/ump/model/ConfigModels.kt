@@ -644,6 +644,15 @@ data class PlaybackSpec(
     val player: PlayerSpec = PlayerSpec(),
     /** 音频播放专属行为（视频不使用） */
     val audio: AudioPlaybackSpec = AudioPlaybackSpec(),
+    /**
+     * 网页播放：`playUrl` 是**网页地址**（如 `watch?v=` ），交给平台内嵌浏览器去放，
+     * 不再交给 Media3 去直连。YouTube 这类"直链需签名、必须由站点自己的播放器解码"的站，
+     * 只有这条路能出声：站点在网页里自己取流、自己解密、自己 DRM。
+     *
+     * 代价是画面里那套控件属于站点（进度条/清晰度/字幕都在网页里），
+     * 我们只提供容器与外层布局。不支持的端（桌面、TV 4.4）会显示"此端不支持网页播放"。
+     */
+    val web: Boolean = false,
 )
 
 @Serializable

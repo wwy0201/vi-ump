@@ -59,7 +59,24 @@ fun ContentRoute(
     onScrollAwayChange: ((Boolean) -> Unit)? = null,
     /** 真正起播时回调，供宿主写观看历史；预选但没播不算 */
     onWatch: (PlayTarget) -> Unit = {},
+    /**
+     * 网页播放槽位（`(url, modifier) -> Unit`）：配置写了 `playback.web` 时走这条路，
+     * 由 app 壳层注入内嵌浏览器。桌面 / TV 不注入，页面会显示"此端不支持网页播放"。
+     */
+    webPlayer: (@Composable (String, Modifier) -> Unit)? = null,
 ) {
+    // 网页播放整个跳过详情请求与 ExoPlayer：画面、控件、清晰度都由站点自己在网页里提供
+    if (session.schema.config.playback.web) {
+        WebContentRoute(
+            session = session,
+            item = item,
+            modifier = modifier,
+            webPlayer = webPlayer,
+            initialTarget = initialTarget,
+        )
+        return
+    }
+
     val page = remember(session, item.detailResource) {
         session.schema.pages
             .firstOrNull { it.layout.type == LayoutType.DETAIL && it.layout.resource == item.detailResource }

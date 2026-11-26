@@ -53,6 +53,11 @@ fun AppRoot(
      */
     playerSurface: @Composable (Any?, Modifier) -> Unit = { _, _ -> },
     /**
+     * 网页播放槽位（`(url, modifier) -> Unit`）：源配置写了 `playback.web` 时用它承载画面。
+     * Android 壳层注入 `WebView`；桌面与 TV 不注入，内容页会写明"此端不支持网页播放"。
+     */
+    webPlayer: (@Composable (String, Modifier) -> Unit)? = null,
+    /**
      * 控制条摆放。桌面端传 true（VLC 的画面是 heavyweight `Canvas`，会盖住叠在画面里的控件），
      * 手机端保持默认 false（叠层 + 静置 3 秒自动隐藏）。
      */
@@ -672,6 +677,7 @@ fun AppRoot(
                                 target.trackIndex,
                             )
                         },
+                        webPlayer = webPlayer,
                     )
 
                     selected != null -> DetailRoute(

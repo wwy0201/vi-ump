@@ -1,12 +1,19 @@
 package com.vi.ump.android
 
 import android.os.Bundle
+import android.view.View
+import android.webkit.CookieManager
+import android.webkit.WebChromeClient
+import android.webkit.WebSettings
+import android.webkit.WebView
+import android.webkit.WebViewClient
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -161,6 +168,8 @@ class MainActivity : ComponentActivity() {
                     },
                 ),
                 playerSurface = { token, modifier -> Media3Surface(token, modifier) },
+                // 网页播放（配置 `playback.web`）：同一个 WebView 里让站点自己的播放器取流
+                webPlayer = { url, modifier -> WebPlaySurface(url, modifier) },
                 // 系统返回键接进 AppRoot 的返回栈：设置/详情/播放页时回退，首页时让系统正常退出
                 backDispatcher = { enabled, action ->
                     BackHandler(enabled = enabled) { action() }
@@ -244,6 +253,73 @@ class MainActivity : ComponentActivity() {
  * `useController = false`：控制器（播放/进度/全屏按钮）由 Compose 侧自己画，
  * 免得和 `UmpPlayer` 的播放按钮、进度条出现两套控件互相抢状态。
  */
+/**
+ * 网页播放的画面：内嵌 WebView 直接打开站点自己的播放页。
+ *
+ * 为什么必须走网页：抓来的直链要 `nsig` 签名 + PoToken，几秒就 403；
+ * 站点只让自己前端取的流能持续播，所以画面、进度条、清晰度全交回站点。
+ *
+ * UA 去掉了 `wv` 标记：带上它站点的前端检测会判"内嵌浏览器不支持"，直接不给播。
+ */
+@Composable
+private fun WebPlaySurface(url: String, modifier: Modifier) {
+    var view by remember { mutableStateOf<WebView?>(null) }
+    DisposableEffect(Unit) {
+        onDispose {
+            view?.let {
+                it.stopLoading()
+                it.loadUrl("about:blank")
+                it.destroy()
+            }
+            view = null
+        }
+    }
+    AndroidView(
+        modifier = modifier,
+        factory = { ctx ->
+            WebView(ctx).apply {
+                setBackgroundColor(android.graphics.Color.BLACK)
+                setLayerType(View.LAYER_TYPE_HARDWARE, null)
+                settings.javaScriptEnabled = true
+                settings.domStorageEnabled = true
+                settings.databaseEnabled = true
+                settings.mediaPlaybackRequiresUserGesture = false
+                settings.loadWithOverviewMode = true
+                settings.useWideViewPort = true
+                settings.cacheMode = WebSettings.LOAD_DEFAULT
+                settings.userAgentString = WEB_PLAY_UA
+                CookieManager.getInstance().setAcceptCookie(true)
+                CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
+                webChromeClient = object : WebChromeClient() {}
+                webViewClient = object : WebViewClient() {
+                    override fun shouldOverrideUrlLoading(
+                        v: WebView,
+                        req: android.webkit.WebResourceRequest,
+                    ): Boolean {
+                        // 站内跳转（相关视频、频道页）留在本 WebView 继续放
+                        val host = req.url?.host?.lowercase().orEmpty()
+                        if (host.endsWith("youtube.com") || host.endsWith("youtu.be")) return false
+                        // 非网页协议（intent://、market://、外部站点）交给系统
+                        runCatching {
+                            v.context.startActivity(
+                                android.content.Intent(android.content.Intent.ACTION_VIEW, req.url),
+                            )
+                        }
+                        return true
+                    }
+                }
+                loadUrl(url)
+                view = this
+            }
+        },
+        update = { if (it.url != url) it.loadUrl(url) },
+    )
+}
+
+private const val WEB_PLAY_UA =
+    "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) " +
+        "Chrome/131.0.0.0 Mobile Safari/537.36"
+
 @Composable
 private fun Media3Surface(token: Any?, modifier: Modifier) {
     val player = token as? Player ?: return

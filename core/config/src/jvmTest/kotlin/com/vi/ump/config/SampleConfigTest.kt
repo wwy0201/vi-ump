@@ -86,6 +86,12 @@ class SampleConfigTest {
             detail.request.urlTemplate.contains("/oembed"),
             "详情应走 oEmbed，实际模板：${detail.request.urlTemplate}",
         )
+
+        // 直链要 nsig 签名 + PoToken，只能交给内嵌浏览器：配置必须开网页播放
+        assertTrue(
+            schema.config.playback.web,
+            "youtube.json 必须开 playback.web，否则 playUrl 是 watch 页、ExoPlayer 必报 P3003",
+        )
     }
 
     @Test
